@@ -1,0 +1,133 @@
+<%- include('../../partials/header') %>
+
+<div class="container-fluid px-4">
+    <h1 class="mt-4">Quản lý đơn hàng</h1>
+    
+    <% if (messages.success) { %>
+        <div class="alert alert-success">
+            <%= messages.success %>
+        </div>
+    <% } %>
+    
+    <% if (messages.error) { %>
+        <div class="alert alert-danger">
+            <%= messages.error %>
+        </div>
+    <% } %>
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="fas fa-shopping-cart me-1"></i>
+            Danh sách đơn hàng
+        </div>
+        <div class="card-body">
+            <table id="ordersTable" class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Mã đơn</th>
+                        <th>Khách hàng</th>
+                        <th>Tổng tiền</th>
+                        <th>Phương thức</th>
+                        <th>Trạng thái TT</th>
+                        <th>Trạng thái ĐH</th>
+                        <th>Ngày tạo</th>
+                        <th>Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% orders.forEach(order => { %>
+                        <tr>
+                            <td><%= order._id %></td>
+                            <td>
+                                <div><%= order.user.name %></div>
+                                <small class="text-muted"><%= order.user.email %></small>
+                            </td>
+                            <td>
+                                <%= new Intl.NumberFormat('vi-VN', { 
+                                    style: 'currency', 
+                                    currency: 'VND' 
+                                }).format(order.totalAmount) %>
+                            </td>
+                            <td>
+                                <% const paymentMethodLabels = {
+                                    'COD': 'Thanh toán khi nhận hàng',
+                                    'VNPAY': 'Thanh toán VNPAY',
+                                    'MOMO': 'Thanh toán MOMO'
+                                } %>
+                                <%= paymentMethodLabels[order.paymentMethod] %>
+                            </td>
+                            <td>
+                                <select class="form-select form-select-sm payment-status <%= (order.orderStatus === 'Đã hủy' || order.orderStatus === 'Đã giao hàng') ? 'disabled-select' : '' %>" 
+                                        data-id="<%= order._id %>"
+                                        <%= (order.orderStatus === 'Đã hủy' || order.orderStatus === 'Đã giao hàng') ? 'disabled' : '' %>>
+                                    <option value="Chưa thanh toán" 
+                                            <%= order.paymentStatus === 'Chưa thanh toán' ? 'selected' : '' %>>
+                                        Chưa thanh toán
+                                    </option>
+                                    <option value="Đã thanh toán"
+                                            <%= order.paymentStatus === 'Đã thanh toán' ? 'selected' : '' %>>
+                                        Đã thanh toán
+                                    </option>
+                                    <option value="Hoàn tiền"
+                                            <%= order.paymentStatus === 'Hoàn tiền' ? 'selected' : '' %>>
+                                        Hoàn tiền
+                                    </option>
+                                </select>
+                            </td>
+                            <td>
+                                <select class="form-select form-select-sm order-status <%= (order.orderStatus === 'Đã hủy' || order.orderStatus === 'Đã giao hàng') ? 'disabled-select' : '' %>"
+                                        data-id="<%= order._id %>"
+                                        <%= (order.orderStatus === 'Đã hủy' || order.orderStatus === 'Đã giao hàng') ? 'disabled' : '' %>>
+                                    <option value="Chờ xác nhận"
+                                            <%= order.orderStatus === 'Chờ xác nhận' ? 'selected' : '' %>>
+                                        Chờ xác nhận
+                                    </option>
+                                    <option value="Đã xác nhận"
+                                            <%= order.orderStatus === 'Đã xác nhận' ? 'selected' : '' %>>
+                                        Đã xác nhận
+                                    </option>
+                                    <option value="Đang giao hàng"
+                                            <%= order.orderStatus === 'Đang giao hàng' ? 'selected' : '' %>>
+                                        Đang giao hàng
+                                    </option>
+                                    <option value="Đã giao hàng"
+                                            <%= order.orderStatus === 'Đã giao hàng' ? 'selected' : '' %>>
+                                        Đã giao hàng
+                                    </option>
+                                    <option value="Đã hủy"
+                                            <%= order.orderStatus === 'Đã hủy' ? 'selected' : '' %>>
+                                        Đã hủy
+                                    </option>
+                                </select>
+                            </td>
+                            <td>
+                                <%= new Date(order.createdAt).toLocaleDateString('vi-VN', {
+                                    year: 'numeric',
+                                    month: '2-digit',
+                                    day: '2-digit',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                }) %>
+                            </td>
+                            <td>
+                                <a href="/orders/<%= order._id %>" 
+                                   class="btn btn-info btn-sm">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                <button class="btn btn-danger btn-sm delete-order" 
+                                        data-id="<%= order._id %>"
+                                        <%= !['Chờ xác nhận', 'Đã hủy'].includes(order.orderStatus) ? 'disabled' : '' %>>
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    <% }) %>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script src="/js/order.js"></script>
+
+<%- include('../../partials/footer') %>
