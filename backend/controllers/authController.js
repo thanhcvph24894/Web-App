@@ -1,86 +1,162 @@
-const User = require('../models/User');
+// authController.js
+
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 
-class AuthController {
-    // Hiển thị form đăng nhập
-    async showLoginForm(req, res) {
-        console.log('Showing login form');
-        console.log('Flash messages:', req.flash());
-        res.render('pages/login', {
-            title: 'Đăng nhập',
-            messages: req.flash()
-        });
-    }
+// Giả lập database người dùng
+let users = [];
+let refreshTokens = [];
 
-    // Xử lý đăng nhập
-    async login(req, res) {
-        try {
-            console.log('Login attempt with:', req.body);
-            const { email, password } = req.body;
+// Hàm validate email
+const isValidEmail = (email) => {
+    const re = /\S+@\S+\.\S+/;
+    return re.test(email);
+};
 
-            // Validate đầu vào
-            if (!email || !password) {
-                console.log('Missing email or password');
-                req.flash('error', 'Vui lòng nhập đầy đủ thông tin');
-                return res.redirect('/login');
-            }
+// Hàm tạo access token
+const generateAccessToken = (user) => {
+    return jwt.sign({ username: user.username }, 'access_secret_key', { expiresIn: '15m' });
+};
 
-            // Kiểm tra user tồn tại
-            const user = await User.findOne({ email });
-            console.log('Found user:', user);
-            
-            if (!user) {
-                console.log('User not found');
-                req.flash('error', 'Email hoặc mật khẩu không đúng');
-                return res.redirect('/login');
-            }
+// Hàm tạo refresh token
+const generateRefreshToken = (user) => {
+    return jwt.sign({ username: user.username }, 'refresh_secret_key', { expiresIn: '7d' });
+};
 
-            // Kiểm tra password
-            const isMatch = await bcrypt.compare(password, user.password);
-            console.log('Password match:', isMatch);
-            
-            if (!isMatch) {
-                console.log('Password incorrect');
-                req.flash('error', 'Email hoặc mật khẩu không đúng');
-                return res.redirect('/login');
-            }
+// Controller: Register
+const register = async (req, res) => {
+    try {
+        const { username, email, password } = req.body;
 
-            // Kiểm tra role
-            if (user.role !== 'admin') {
-                console.log('User is not admin');
-                req.flash('error', 'Bạn không có quyền truy cập trang quản trị');
-                return res.redirect('/login');
-            }
-
-            // Lưu thông tin user vào session
-            req.session.user = {
-                id: user._id,
-                name: user.name,
-                email: user.email,
-                role: user.role
-            };
-            console.log('Session saved:', req.session);
-
-            // Redirect tới trang dashboard
-            res.redirect('/dashboard');
-        } catch (error) {
-            console.error('Login error:', error);
-            req.flash('error', 'Có lỗi xảy ra khi đăng nhập');
-            res.redirect('/login');
+        // Kiểm tra dữ liệu
+        if (!username || !email || !password) {
+            return res.status(400).json({ message: 'All fields are required' });
         }
-    }
 
-    // Xử lý đăng xuất
-    async logout(req, res) {
-        req.session.destroy((err) => {
-            if (err) {
-                console.error('Lỗi đăng xuất:', err);
-                req.flash('error', 'Có lỗi xảy ra khi đăng xuất');
-                return res.redirect('/dashboard');
-            }
-            res.redirect('/login');
+        if (!isValidEmail(email)) {
+            return res.status(400).json({ message: 'Invalid email format' });
+        }
+
+        if (password.length < 6) {
+            return res.status(400).json({ message: 'Password must be at least 6 characters' });
+        }
+
+        // Kiểm tra username hoặc email đã tồn tại
+        const userExists = users.find(user => user.username === username || user.email === email);
+        if (userExists) {
+            return res.status(400).json({ message: 'Username or email already exists' });
+        }
+
+        // Hash password
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        // Tạo user mới
+        const newUser = {
+            id: users.length + 1,
+            username,
+            email,
+            password: hashedPassword,
+            createdAt: new Date()
+        };
+
+        users.push(newUser);
+
+        res.status(201).json({ message: 'User registered successfully', user: { username: newUser.username, email: newUser.email } });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
+// Controller: Login
+const login = async (req, res) => {
+    try {
+        const { username, password } = req.body;
+
+        // Kiểm tra dữ liệu
+        if (!username || !password) {
+            return res.status(400).json({ message: 'All fields are required' });
+        }
+
+        const user = users.find(user => user.username === username);
+
+        if (!user) {
+            return res.status(400).json({ message: 'Invalid username or password' });
+        }
+
+        const isMatch = await bcrypt.compare(password, user.password);
+
+        if (!isMatch) {
+            return res.status(400).json({ message: 'Invalid username or password' });
+        }
+
+        const accessToken = generateAccessToken(user);
+        const refreshToken = generateRefreshToken(user);
+
+        refreshTokens.push(refreshToken);
+
+        res.status(200).json({
+            accessToken,
+            refreshToken
         });
-    }
-}
 
-module.exports = new AuthController(); 
+    } catch (error) {
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
+// Controller: Logout
+const logout = (req, res) => {
+    try {
+        const { token } = req.body;
+
+        if (!token) {
+            return res.status(400).json({ message: 'Token is required' });
+        }
+
+        refreshTokens = refreshTokens.filter(t => t !== token);
+
+        res.status(200).json({ message: 'Logged out successfully' });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
+// Controller: Refresh Token
+const refreshToken = (req, res) => {
+    try {
+        const { token } = req.body;
+
+        if (!token) {
+            return res.status(401).json({ message: 'Refresh token is required' });
+        }
+
+        if (!refreshTokens.includes(token)) {
+            return res.status(403).json({ message: 'Invalid refresh token' });
+        }
+
+        jwt.verify(token, 'refresh_secret_key', (err, user) => {
+            if (err) {
+                return res.status(403).json({ message: 'Invalid refresh token' });
+            }
+
+            const newAccessToken = generateAccessToken({ username: user.username });
+
+            res.status(200).json({ accessToken: newAccessToken });
+        });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
+// Controller: Get all users (for testing)
+const getAllUsers = (req, res) => {
+    res.status(200).json({ users });
+};
+
+module.exports = {
+    register,
+    login,
+    logout,
+    refreshToken,
+    getAllUsers
+};
