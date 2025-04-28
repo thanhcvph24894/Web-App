@@ -1,0 +1,245 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3 mb-0">Tổng quan</h1>
+    <div>
+        <button class="btn btn-outline-secondary" onclick="window.print()">
+            <i class="fas fa-print me-2"></i>In báo cáo
+        </button>
+    </div>
+</div>
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Danh mục</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800"><%= stats.categoryCount %></div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-folder fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Sản phẩm</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800"><%= stats.productCount %></div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-box fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Đơn hàng</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800"><%= stats.orderCount %></div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-shopping-cart fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Doanh thu</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                <%= new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(stats.totalRevenue) %>
+                            </div>
+                            <small class="text-muted">Từ <%= stats.completedOrdersCount %> đơn hàng đã hoàn thành</small>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-danger shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                                Khách hàng</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800"><%= stats.userCount %></div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-users fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Đơn hàng mới nhất -->
+        <div class="col-xl-6 col-lg-6">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-primary">Đơn hàng mới nhất</h6>
+                    <a href="/orders" class="btn btn-sm btn-primary">
+                        <i class="fas fa-arrow-right"></i>
+                    </a>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered" width="100%" cellspacing="0">
+                            <thead>
+                                <tr>
+                                    <th>Mã đơn</th>
+                                    <th>Khách hàng</th>
+                                    <th>Tổng tiền</th>
+                                    <th>Trạng thái</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% if (recentOrders.length > 0) { %>
+                                    <% recentOrders.forEach(order => { %>
+                                    <tr>
+                                        <td><%= order._id %></td>
+                                        <td><%= order.user ? order.user.name : 'N/A' %></td>
+                                        <td><%= new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(order.totalAmount) %></td>
+                                        <td>
+                                            <% 
+                                            let statusClass = '';
+                                            switch(order.orderStatus) {
+                                                case 'Chờ xác nhận':
+                                                    statusClass = 'warning';
+                                                    break;
+                                                case 'Đã xác nhận':
+                                                    statusClass = 'info';
+                                                    break;
+                                                case 'Đang giao hàng':
+                                                    statusClass = 'primary';
+                                                    break;
+                                                case 'Đã giao hàng':
+                                                    statusClass = 'success';
+                                                    break;
+                                                case 'Đã hủy':
+                                                    statusClass = 'danger';
+                                                    break;
+                                                default:
+                                                    statusClass = 'secondary';
+                                            }
+                                            %>
+                                            <span class="badge bg-<%= statusClass %>">
+                                                <%= order.orderStatus %>
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    <% }) %>
+                                <% } else { %>
+                                    <tr>
+                                        <td colspan="4" class="text-center">Chưa có đơn hàng nào</td>
+                                    </tr>
+                                <% } %>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sản phẩm mới nhất -->
+        <div class="col-xl-6 col-lg-6">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-primary">Sản phẩm mới nhất</h6>
+                    <a href="/products" class="btn btn-sm btn-primary">
+                        <i class="fas fa-arrow-right"></i>
+                    </a>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered" width="100%" cellspacing="0">
+                            <thead>
+                                <tr>
+                                    <th>Tên sản phẩm</th>
+                                    <th>Danh mục</th>
+                                    <th>Giá</th>
+                                    <th>Trạng thái</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% if (recentProducts.length > 0) { %>
+                                    <% recentProducts.forEach(product => { %>
+                                    <tr>
+                                        <td><%= product.name %></td>
+                                        <td><%= product.category ? product.category.name : 'N/A' %></td>
+                                        <td><%= new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(product.price) %></td>
+                                        <td>
+                                            <span class="badge bg-<%= product.isActive ? 'success' : 'danger' %>">
+                                                <%= product.isActive ? 'Đang bán' : 'Ngừng bán' %>
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    <% }) %>
+                                <% } else { %>
+                                    <tr>
+                                        <td colspan="4" class="text-center">Chưa có sản phẩm nào</td>
+                                    </tr>
+                                <% } %>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.border-left-primary {
+    border-left: .25rem solid #4e73df!important;
+}
+.border-left-success {
+    border-left: .25rem solid #1cc88a!important;
+}
+.border-left-info {
+    border-left: .25rem solid #36b9cc!important;
+}
+.border-left-warning {
+    border-left: .25rem solid #f6c23e!important;
+}
+.border-left-danger {
+    border-left: .25rem solid #e74a3b!important;
+}
+.text-gray-300 {
+    color: #dddfeb!important;
+}
+.text-gray-800 {
+    color: #5a5c69!important;
+}
+@media print {
+    .btn {
+        display: none;
+    }
+}
+</style> 
