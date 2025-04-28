@@ -5,18 +5,6 @@ const path = require('path');
 const slugify = require('slugify');
 
 class ProductController {
-    constructor() {
-        // Bind methods to maintain this context
-        this.index = this.index.bind(this);
-        this.showCreateForm = this.showCreateForm.bind(this);
-        this.create = this.create.bind(this);
-        this.showEditForm = this.showEditForm.bind(this);
-        this.update = this.update.bind(this);
-        this.delete = this.delete.bind(this);
-        this.updateStatus = this.updateStatus.bind(this);
-        this.handleError = this.handleError.bind(this);
-    }
-
     // Hiển thị danh sách sản phẩm
     async index(req, res, next) {
         try {
@@ -27,9 +15,7 @@ class ProductController {
             res.render('pages/products/index', {
                 title: 'Quản lý sản phẩm',
                 products,
-                messages: req.flash(),
-                style: '',
-                script: ''
+                messages: req.flash()
             });
         } catch (error) {
             next(error);
@@ -43,9 +29,7 @@ class ProductController {
             res.render('pages/products/create', {
                 title: 'Thêm sản phẩm mới',
                 categories,
-                messages: req.flash(),
-                style: '',
-                script: ''
+                messages: req.flash()
             });
         } catch (error) {
             next(error);
@@ -56,10 +40,9 @@ class ProductController {
     async create(req, res, next) {
         try {
             const productData = this.prepareProductData(req.body);
-            
-            // Xử lý hình ảnh
-            if (req.files && req.files.length > 0) {
-                productData.images = req.files.map(file => '/uploads/products/' + file.filename);
+
+            if (req.files?.length) {
+                productData.images = this.handleFileUpload(req.files);
             }
 
             await Product.create(productData);
@@ -89,9 +72,7 @@ class ProductController {
                 title: 'Chỉnh sửa sản phẩm',
                 product,
                 categories,
-                messages: req.flash(),
-                style: '',
-                script: ''
+                messages: req.flash()
             });
         } catch (error) {
             next(error);
@@ -102,17 +83,13 @@ class ProductController {
     async update(req, res, next) {
         try {
             const product = await Product.findById(req.params.id);
-            if (!product) {
-                throw new Error('Không tìm thấy sản phẩm');
-            }
+            if (!product) throw new Error('Không tìm thấy sản phẩm');
 
             const updateData = this.prepareProductData(req.body);
 
-            // Xử lý hình ảnh mới
-            if (req.files && req.files.length > 0) {
-                // Xóa ảnh cũ
+            if (req.files?.length) {
                 this.deleteProductImages(product.images);
-                updateData.images = req.files.map(file => '/uploads/products/' + file.filename);
+                updateData.images = this.handleFileUpload(req.files);
             }
 
             await Product.findByIdAndUpdate(req.params.id, updateData);
@@ -129,44 +106,21 @@ class ProductController {
     async delete(req, res) {
         try {
             const product = await Product.findById(req.params.id);
-            if (!product) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'Không tìm thấy sản phẩm'
-                });
-            }
+            if (!product) return res.status(404).json({ success: false, message: 'Không tìm thấy sản phẩm' });
 
-            // Xóa ảnh sản phẩm
             this.deleteProductImages(product.images);
-
             await Product.findByIdAndDelete(req.params.id);
-            res.json({
-                success: true,
-                message: 'Xóa sản phẩm thành công'
-            });
+            res.json({ success: true, message: 'Xóa sản phẩm thành công' });
         } catch (error) {
-            res.status(500).json({
-                success: false,
-                message: error.message || 'Có lỗi xảy ra khi xóa sản phẩm'
-            });
+            res.status(500).json({ success: false, message: error.message || 'Có lỗi xảy ra khi xóa sản phẩm' });
         }
     }
 
     // Cập nhật trạng thái sản phẩm
     async updateStatus(req, res) {
         try {
-            const product = await Product.findByIdAndUpdate(
-                req.params.id,
-                { isActive: req.body.isActive },
-                { new: true }
-            );
-
-            if (!product) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'Không tìm thấy sản phẩm'
-                });
-            }
+            const product = await Product.findByIdAndUpdate(req.params.id, { isActive: req.body.isActive }, { new: true });
+            if (!product) return res.status(404).json({ success: false, message: 'Không tìm thấy sản phẩm' });
 
             res.json({
                 success: true,
@@ -174,50 +128,51 @@ class ProductController {
                 isActive: product.isActive
             });
         } catch (error) {
-            res.status(500).json({
-                success: false,
-                message: error.message || 'Có lỗi xảy ra khi cập nhật trạng thái'
-            });
+            res.status(500).json({ success: false, message: error.message || 'Có lỗi xảy ra khi cập nhật trạng thái' });
         }
     }
 
-    // Helper method to prepare product data
+    // Helper: chuẩn bị dữ liệu sản phẩm
     prepareProductData(body) {
         return {
             name: body.name.trim(),
             slug: slugify(body.name, { lower: true, locale: 'vi', strict: true }),
-            description: body.description ? body.description.trim() : '',
+            description: body.description?.trim() || '',
             price: parseFloat(body.price.replace(/[^\d]/g, '')),
             stock: parseInt(body.stock),
             category: body.category,
             isActive: body.isActive === 'on',
-            colors: body.colors ? (Array.isArray(body.colors) ? body.colors : body.colors.split(',').map(c => c.trim())) : [],
-            sizes: body.sizes ? (Array.isArray(body.sizes) ? body.sizes : body.sizes.split(',').map(s => s.trim())) : []
+            colors: this.prepareArray(body.colors),
+            sizes: this.prepareArray(body.sizes)
         };
     }
 
-    // Helper method to delete product images
+    // Helper: chuẩn bị mảng từ chuỗi
+    prepareArray(input) {
+        return Array.isArray(input) ? input : input?.split(',').map(item => item.trim()) || [];
+    }
+
+    // Helper: xử lý upload file hình ảnh
+    handleFileUpload(files) {
+        return files.map(file => '/uploads/products/' + file.filename);
+    }
+
+    // Helper: xóa hình ảnh của sản phẩm
     deleteProductImages(images) {
-        if (images && images.length > 0) {
+        if (images?.length) {
             images.forEach(image => {
                 const imagePath = path.join(__dirname, '../public', image);
-                if (fs.existsSync(imagePath)) {
-                    fs.unlinkSync(imagePath);
-                }
+                if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
             });
         }
     }
 
-    // Helper method to handle errors and clean up uploaded files
+    // Helper: xử lý lỗi và xóa các file đã upload
     handleError(error, files) {
-        // Xóa file đã upload nếu có lỗi
-        if (files) {
-            const uploadedFiles = Array.isArray(files) ? files : [files];
-            uploadedFiles.forEach(file => {
+        if (files?.length) {
+            files.forEach(file => {
                 const filePath = path.join(__dirname, '../public/uploads/products', file.filename);
-                if (fs.existsSync(filePath)) {
-                    fs.unlinkSync(filePath);
-                }
+                if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
             });
         }
         console.error('Lỗi:', error);
@@ -225,4 +180,4 @@ class ProductController {
     }
 }
 
-module.exports = new ProductController(); 
+module.exports = new ProductController();
