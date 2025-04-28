@@ -7,7 +7,7 @@ const moment = require('moment');
 class DashboardController {
     async index(req, res, next) {
         try {
-            // Thực hiện nhiều truy vấn song song để tối ưu tốc độ
+            // Lấy số liệu tổng hợp song song
             const [
                 categoryCount,
                 productCount,
@@ -27,41 +27,22 @@ class DashboardController {
                     orderStatus: 'Đã giao hàng',
                     paymentStatus: 'Đã thanh toán'
                 }),
-                Order.find(),
+                Order.find().lean(),
                 Order.find()
                     .sort({ createdAt: -1 })
                     .limit(5)
-                    .populate('user', 'name email'),
+                    .populate('user', 'name email')
+                    .lean(),
                 Product.find()
                     .sort({ createdAt: -1 })
                     .limit(5)
-                    .populate('category', 'name'),
-                Order.aggregate([
-                    { 
-                        $match: { 
-                            orderStatus: 'Đã giao hàng',
-                            paymentStatus: 'Đã thanh toán'
-                        }
-                    },
-                    {
-                        $group: {
-                            _id: null,
-                            total: { $sum: '$totalAmount' }
-                        }
-                    }
-                ])
+                    .populate('category', 'name')
+                    .lean(),
+                this.getRevenue()
             ]);
 
-            // Thống kê số lượng đơn hàng theo trạng thái
-            const orderStatusSummary = {};
-            const paymentStatusSummary = {};
-
-            allOrders.forEach(order => {
-                orderStatusSummary[order.orderStatus] = (orderStatusSummary[order.orderStatus] || 0) + 1;
-                paymentStatusSummary[order.paymentStatus] = (paymentStatusSummary[order.paymentStatus] || 0) + 1;
-            });
-
-            const totalRevenue = revenueResult[0]?.total || 0;
+            const { orderStatusSummary, paymentStatusSummary } = this.summarizeOrders(allOrders);
+            const totalRevenue = revenueResult || 0;
 
             res.render('pages/dashboard', {
                 title: 'Tổng quan',
@@ -81,24 +62,59 @@ class DashboardController {
             });
         } catch (error) {
             console.error('Lỗi khi tải Dashboard:', error);
+
             req.flash('error', 'Có lỗi xảy ra khi tải trang tổng quan');
             res.render('pages/dashboard', {
                 title: 'Tổng quan',
-                stats: {
-                    categoryCount: 0,
-                    productCount: 0,
-                    orderCount: 0,
-                    userCount: 0,
-                    totalRevenue: 0,
-                    completedOrdersCount: 0,
-                    orderStatusSummary: {},
-                    paymentStatusSummary: {}
-                },
+                stats: this.emptyStats(),
                 recentOrders: [],
                 recentProducts: [],
                 messages: req.flash()
             });
         }
+    }
+
+    async getRevenue() {
+        const result = await Order.aggregate([
+            { 
+                $match: { 
+                    orderStatus: 'Đã giao hàng',
+                    paymentStatus: 'Đã thanh toán'
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    total: { $sum: '$totalAmount' }
+                }
+            }
+        ]);
+        return result[0]?.total || 0;
+    }
+
+    summarizeOrders(orders) {
+        const orderStatusSummary = {};
+        const paymentStatusSummary = {};
+
+        orders.forEach(order => {
+            orderStatusSummary[order.orderStatus] = (orderStatusSummary[order.orderStatus] || 0) + 1;
+            paymentStatusSummary[order.paymentStatus] = (paymentStatusSummary[order.paymentStatus] || 0) + 1;
+        });
+
+        return { orderStatusSummary, paymentStatusSummary };
+    }
+
+    emptyStats() {
+        return {
+            categoryCount: 0,
+            productCount: 0,
+            orderCount: 0,
+            userCount: 0,
+            totalRevenue: 0,
+            completedOrdersCount: 0,
+            orderStatusSummary: {},
+            paymentStatusSummary: {}
+        };
     }
 }
 
