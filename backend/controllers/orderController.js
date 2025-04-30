@@ -23,6 +23,21 @@ const getPaymentStatusEnums = () => {
     }
 };
 
+// Trạng thái hợp lệ cho flow đơn hàng và thanh toán
+const validOrderFlows = {
+    'Chờ xác nhận': ['Đã xác nhận', 'Đã hủy'],
+    'Đã xác nhận': ['Đang giao hàng', 'Đã hủy'],
+    'Đang giao hàng': ['Đã giao hàng', 'Đã hủy'],
+    'Đã giao hàng': ['Đã giao hàng'],
+    'Đã hủy': ['Đã hủy']
+};
+
+const validPaymentFlows = {
+    'Chưa thanh toán': ['Đã thanh toán'],
+    'Đã thanh toán': ['Hoàn tiền'],
+    'Hoàn tiền': ['Hoàn tiền']
+};
+
 class OrderController {
     // GET /orders
     async index(req, res, next) {
@@ -30,7 +45,8 @@ class OrderController {
             const orders = await Order.find()
                 .populate('user', 'name email phone')
                 .populate('items.product', 'name images')
-                .sort({ createdAt: -1 });
+                .sort({ createdAt: -1 })
+                .lean();
 
             res.render('pages/orders/index', {
                 title: 'Quản lý đơn hàng',
@@ -49,7 +65,8 @@ class OrderController {
         try {
             const order = await Order.findById(req.params.id)
                 .populate('user', 'name email phone address')
-                .populate('items.product', 'name images price');
+                .populate('items.product', 'name images price')
+                .lean();
 
             if (!order) {
                 req.flash('error', 'Không tìm thấy đơn hàng');
@@ -74,41 +91,24 @@ class OrderController {
             const { orderStatus } = req.body;
             const order = await Order.findById(req.params.id);
 
-            if (!order) {
-                return res.status(404).json({ success: false, message: 'Không tìm thấy đơn hàng' });
-            }
+            if (!order) return res.status(404).json({ success: false, message: 'Không tìm thấy đơn hàng' });
 
             const validStatuses = getOrderStatusEnums();
             if (!validStatuses.includes(orderStatus)) {
                 return res.status(400).json({ success: false, message: 'Trạng thái đơn hàng không hợp lệ' });
             }
 
-            if (order.orderStatus === 'Đã hủy' || 
-                (order.orderStatus === 'Đã giao hàng' && orderStatus !== 'Đã giao hàng')) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Không thể thay đổi trạng thái đơn hàng đã hủy hoặc đã giao thành công'
-                });
-            }
-
-            const validStatusFlow = {
-                'Chờ xác nhận': ['Đã xác nhận', 'Đã hủy'],
-                'Đã xác nhận': ['Đang giao hàng', 'Đã hủy'],
-                'Đang giao hàng': ['Đã giao hàng', 'Đã hủy'],
-                'Đã giao hàng': ['Đã giao hàng'],
-                'Đã hủy': ['Đã hủy']
-            };
-
-            if (!validStatusFlow[order.orderStatus]?.includes(orderStatus)) {
+            if (!validOrderFlows[order.orderStatus]?.includes(orderStatus)) {
                 return res.status(400).json({
                     success: false,
                     message: `Không thể chuyển trạng thái từ "${order.orderStatus}" sang "${orderStatus}"`
                 });
             }
 
+            // Update trạng thái đơn hàng
             order.orderStatus = orderStatus;
 
-            // Xử lý tự động cập nhật paymentStatus nếu cần
+            // Xử lý cập nhật trạng thái thanh toán tự động nếu cần
             if (orderStatus === 'Đã giao hàng' && order.paymentMethod === 'COD' && order.paymentStatus === 'Chưa thanh toán') {
                 order.paymentStatus = 'Đã thanh toán';
             } else if (orderStatus === 'Đã hủy' && order.paymentStatus === 'Đã thanh toán') {
@@ -133,33 +133,32 @@ class OrderController {
             const { paymentStatus } = req.body;
             const order = await Order.findById(req.params.id);
 
-            if (!order) {
-                return res.status(404).json({ success: false, message: 'Không tìm thấy đơn hàng' });
-            }
+            if (!order) return res.status(404).json({ success: false, message: 'Không tìm thấy đơn hàng' });
 
             const validStatuses = getPaymentStatusEnums();
             if (!validStatuses.includes(paymentStatus)) {
                 return res.status(400).json({ success: false, message: 'Trạng thái thanh toán không hợp lệ' });
             }
 
-            if (order.orderStatus === 'Đã hủy' && paymentStatus !== 'Hoàn tiền') {
-                return res.status(400).json({ success: false, message: 'Đơn hàng đã hủy chỉ có thể chuyển sang trạng thái hoàn tiền' });
-            }
-
-            if (order.paymentMethod === 'COD' && order.orderStatus === 'Đã giao hàng' && paymentStatus === 'Chưa thanh toán') {
-                return res.status(400).json({ success: false, message: 'Không thể chuyển đơn hàng COD đã giao về trạng thái chưa thanh toán' });
-            }
-
-            const validPaymentFlow = {
-                'Chưa thanh toán': ['Đã thanh toán'],
-                'Đã thanh toán': ['Hoàn tiền'],
-                'Hoàn tiền': ['Hoàn tiền']
-            };
-
-            if (!validPaymentFlow[order.paymentStatus]?.includes(paymentStatus)) {
+            if (!validPaymentFlows[order.paymentStatus]?.includes(paymentStatus)) {
                 return res.status(400).json({
                     success: false,
                     message: `Không thể chuyển trạng thái thanh toán từ "${order.paymentStatus}" sang "${paymentStatus}"`
+                });
+            }
+
+            // Quy tắc thanh toán đặc biệt
+            if (order.orderStatus === 'Đã hủy' && paymentStatus !== 'Hoàn tiền') {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Đơn hàng đã hủy chỉ có thể chuyển sang trạng thái "Hoàn tiền"'
+                });
+            }
+
+            if (order.paymentMethod === 'COD' && order.orderStatus === 'Đã giao hàng' && paymentStatus === 'Chưa thanh toán') {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Không thể chuyển đơn COD đã giao về "Chưa thanh toán"'
                 });
             }
 
@@ -177,9 +176,7 @@ class OrderController {
         try {
             const order = await Order.findById(req.params.id);
 
-            if (!order) {
-                return res.status(404).json({ success: false, message: 'Không tìm thấy đơn hàng' });
-            }
+            if (!order) return res.status(404).json({ success: false, message: 'Không tìm thấy đơn hàng' });
 
             if (!['Chờ xác nhận', 'Đã hủy'].includes(order.orderStatus)) {
                 return res.status(400).json({ success: false, message: 'Chỉ có thể xóa đơn hàng chưa xác nhận hoặc đã hủy' });
