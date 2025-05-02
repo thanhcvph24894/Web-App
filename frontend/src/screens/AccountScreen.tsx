@@ -8,13 +8,22 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, NavigationProp } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import authService, { AuthUser } from '../services/auth-service';
 import CustomHeader from '../components/CustomHeader';
 
+// Định nghĩa type cho stack nếu dùng TypeScript
+type RootStackParamList = {
+  Login: undefined;
+  Profile: undefined;
+  Orders: undefined;
+  ChangePassword: undefined;
+  Notifications: undefined;
+};
+
 const AccountScreen = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -75,7 +84,6 @@ const AccountScreen = () => {
         <Text style={styles.emptyText}>Vui lòng đăng nhập để xem thông tin tài khoản</Text>
         <TouchableOpacity
           style={styles.loginButton}
-          // @ts-ignore
           onPress={() => navigation.navigate('Login')}>
           <Text style={styles.loginButtonText}>Đăng nhập</Text>
         </TouchableOpacity>
@@ -89,7 +97,9 @@ const AccountScreen = () => {
       
       <View style={styles.header}>
         <View style={styles.avatarContainer}>
-          <Text style={styles.avatarText}>{user.name.charAt(0).toUpperCase()}</Text>
+          <Text style={styles.avatarText}>
+            {user.name ? user.name.charAt(0).toUpperCase() : '?'}
+          </Text>
         </View>
         <View style={styles.userInfo}>
           <Text style={styles.userName}>{user.name}</Text>
@@ -99,29 +109,20 @@ const AccountScreen = () => {
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Tài khoản</Text>
-        
-        <TouchableOpacity 
-          style={styles.menuItem}
-          // @ts-ignore
-          onPress={() => navigation.navigate('Profile')}>
+
+        <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Profile')}>
           <Icon name="person-outline" size={24} color="#2196F3" />
           <Text style={styles.menuText}>Hồ sơ của tôi</Text>
           <Icon name="chevron-forward-outline" size={20} color="#ccc" />
         </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.menuItem}
-          // @ts-ignore
-          onPress={() => navigation.navigate('Orders')}>
+
+        <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Orders')}>
           <Icon name="receipt-outline" size={24} color="#2196F3" />
           <Text style={styles.menuText}>Đơn hàng của tôi</Text>
           <Icon name="chevron-forward-outline" size={20} color="#ccc" />
         </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.menuItem}
-          // @ts-ignore
-          onPress={() => navigation.navigate('ChangePassword')}>
+
+        <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('ChangePassword')}>
           <Icon name="lock-closed-outline" size={24} color="#2196F3" />
           <Text style={styles.menuText}>Đổi mật khẩu</Text>
           <Icon name="chevron-forward-outline" size={20} color="#ccc" />
@@ -130,16 +131,13 @@ const AccountScreen = () => {
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Cài đặt</Text>
-        
-        <TouchableOpacity 
-          style={styles.menuItem}
-          // @ts-ignore
-          onPress={() => navigation.navigate('Notifications')}>
+
+        <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Notifications')}>
           <Icon name="notifications-outline" size={24} color="#2196F3" />
           <Text style={styles.menuText}>Thông báo</Text>
           <Icon name="chevron-forward-outline" size={20} color="#ccc" />
         </TouchableOpacity>
-        
+
         <TouchableOpacity style={styles.menuItem}>
           <Icon name="language-outline" size={24} color="#2196F3" />
           <Text style={styles.menuText}>Ngôn ngữ</Text>
@@ -158,10 +156,7 @@ const AccountScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
+  container: { flex: 1, backgroundColor: '#f5f5f5' },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -267,4 +262,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default AccountScreen; 
+export default AccountScreen;
