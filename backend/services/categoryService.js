@@ -56,8 +56,3 @@ class CategoryService {
     }
 }
 
-<<<<<<< HEAD
-module.exports = new CategoryService(); 
-=======
-module.exports = new CategoryService();
->>>>>>> 8d192a7461170ac9643cad8dfa6bc99a1059b127
