@@ -24,54 +24,6 @@ $(document).ready(function() {
         responsive: true
     });
 
-    // Xử lý xóa đơn hàng
-    $('.delete-order').click(function() {
-        const orderId = $(this).data('id');
-        const row = $(this).closest('tr');
-        
-        Swal.fire({
-            title: 'Xác nhận xóa?',
-            text: 'Bạn có chắc chắn muốn xóa đơn hàng này?',
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#dc3545',
-            cancelButtonColor: '#6c757d',
-            confirmButtonText: 'Xóa',
-            cancelButtonText: 'Hủy'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                $.ajax({
-                    url: `/orders/delete/${orderId}`,
-                    method: 'DELETE',
-                    success: function(response) {
-                        if (response.success) {
-                            Swal.fire({
-                                icon: 'success',
-                                title: 'Thành công',
-                                text: response.message,
-                                showConfirmButton: false,
-                                timer: 1500
-                            }).then(() => {
-                                // Nếu đang ở trang chi tiết, chuyển về trang danh sách
-                                if (window.location.pathname === `/orders/${orderId}`) {
-                                    window.location.href = '/orders';
-                                } else {
-                                    // Xóa dòng khỏi DataTable
-                                    table.row(row).remove().draw();
-                                }
-                            });
-                        } else {
-                            Swal.fire('Lỗi!', response.message, 'error');
-                        }
-                    },
-                    error: function(xhr) {
-                        Swal.fire('Lỗi!', xhr.responseJSON?.message || 'Có lỗi xảy ra khi xóa đơn hàng', 'error');
-                    }
-                });
-            }
-        });
-    });
-
     // Xử lý cập nhật trạng thái đơn hàng
     $('.order-status').change(function() {
         const $select = $(this);
