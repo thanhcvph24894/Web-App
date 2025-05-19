@@ -12,6 +12,8 @@ import {
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types/navigation';
 import { authService, setToken } from '../services';
+import { getFCMToken } from '../services/firebase-messaging';
+import { authRequest } from '../services/api-client';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
@@ -38,6 +40,19 @@ const LoginScreen = ({ navigation }: Props) => {
       console.log('Kết quả đăng nhập:', response);
       
       if (response?.success) {
+        // Lấy FCM token và gửi lên server
+        try {
+          const fcmToken = await getFCMToken();
+          if (fcmToken && String(fcmToken).length > 0) {
+            await authRequest('/auth/update-fcm-token', 'POST', { fcmToken });
+            Alert.alert('Thông báo', 'Đã cập nhật FCM token lên server!');
+          } else {
+            Alert.alert('Lỗi', 'Không lấy được FCM token. Vui lòng kiểm tra quyền thông báo hoặc thử lại.');
+          }
+        } catch (fcmError) {
+          Alert.alert('Lỗi', 'Có lỗi khi cập nhật FCM token!');
+        }
+
         // Đăng nhập thành công, điều hướng đến trang chính
         navigation.navigate('Main', { screen: 'HomeTab' });
       } else {
