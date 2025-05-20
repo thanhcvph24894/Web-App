@@ -75,7 +75,7 @@ async function analyzeOrders() {
                 { paymentMethod: null },
                 { paymentMethod: { $exists: false } },
                 { paymentStatus: null },
-                { paymentStatus: { $exists: false } },
+                { paymentStatus: { $exists: false } }, 
             ],
         });
 
