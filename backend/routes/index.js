@@ -74,7 +74,6 @@ productRoutes.get('/create', productController.showCreateForm);
 productRoutes.post('/create', upload.array('productImages', 5), productController.create);
 productRoutes.get('/edit/:id', productController.showEditForm);
 productRoutes.post('/edit/:id', upload.array('productImages', 5), productController.update);
-productRoutes.delete('/:id', productController.delete);
 productRoutes.put('/:id/status', productController.updateStatus);
 
 router.use('/products', productRoutes);
@@ -101,7 +100,6 @@ orderRoutes.get('/', orderController.index);
 orderRoutes.get('/:id', orderController.show);
 orderRoutes.patch('/status/:id', orderController.updateStatus);
 orderRoutes.patch('/payment-status/:id', orderController.updatePaymentStatus);
-orderRoutes.delete('/delete/:id', orderController.delete);
 
 router.use('/orders', orderRoutes);
 

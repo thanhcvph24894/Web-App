@@ -8,13 +8,12 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types/navigation';
-import { authService } from '../services';
+import { authService, setToken } from '../services';
+import { getFCMToken } from '../services/firebase-messaging';
+import { authRequest } from '../services/api-client';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
@@ -23,34 +22,38 @@ const LoginScreen = ({ navigation }: Props) => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [rememberMe, setRememberMe] = useState(false); // mở rộng chức năng ghi nhớ đăng nhập
-
-  const validateForm = () => {
-    if (!email.trim() || !password.trim()) {
-      setError('Vui lòng nhập đầy đủ thông tin');
-      return false;
-    }
-    if (!email.includes('@')) {
-      setError('Email không hợp lệ');
-      return false;
-    }
-    return true;
-  };
 
   const handleLogin = async () => {
-    if (!validateForm()) return;
+    if (!email || !password) {
+      setError('Vui lòng nhập đầy đủ thông tin');
+      return;
+    }
 
     try {
       setLoading(true);
       setError('');
-
-      console.log('Đăng nhập với:', { email, password });
-
+      
+      console.log('Đang đăng nhập với:', { email, password });
+      
       const response = await authService.login({ email, password });
-
+      
+      console.log('Kết quả đăng nhập:', response);
+      
       if (response?.success) {
-        console.log('Đăng nhập thành công');
-        // Optionally save token/local state
+        // Lấy FCM token và gửi lên server
+        try {
+          const fcmToken = await getFCMToken();
+          if (fcmToken && String(fcmToken).length > 0) {
+            await authRequest('/auth/update-fcm-token', 'POST', { fcmToken });
+            Alert.alert('Thông báo', 'Đã cập nhật FCM token lên server!');
+          } else {
+            Alert.alert('Lỗi', 'Không lấy được FCM token. Vui lòng kiểm tra quyền thông báo hoặc thử lại.');
+          }
+        } catch (fcmError) {
+          Alert.alert('Lỗi', 'Có lỗi khi cập nhật FCM token!');
+        }
+
+        // Đăng nhập thành công, điều hướng đến trang chính
         navigation.navigate('Main', { screen: 'HomeTab' });
       } else {
         setError(response?.message || 'Đăng nhập thất bại');
@@ -63,85 +66,68 @@ const LoginScreen = ({ navigation }: Props) => {
     }
   };
 
-  const renderInputField = (
-    label: string,
-    value: string,
-    placeholder: string,
-    onChangeText: (text: string) => void,
-    secureTextEntry = false
-  ) => (
-    <View style={styles.inputContainer}>
-      <Text style={styles.label}>{label}</Text>
-      <TextInput
-        style={styles.input}
-        placeholder={placeholder}
-        value={value}
-        onChangeText={onChangeText}
-        secureTextEntry={secureTextEntry}
-        editable={!loading}
-        autoCapitalize="none"
-      />
-    </View>
-  );
-
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.container}
-    >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.title}>Đăng nhập</Text>
+    <View style={styles.container}>
+      <Text style={styles.title}>Đăng nhập</Text>
 
-        <View style={styles.formContainer}>
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      <View style={styles.formContainer}>
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-          {renderInputField('Email', email, 'Nhập email', setEmail)}
-          {renderInputField('Mật khẩu', password, 'Nhập mật khẩu', setPassword, true)}
-
-          <TouchableOpacity
-            style={styles.forgotPassword}
-            onPress={() => Alert.alert('Thông báo', 'Chức năng đang phát triển')}
-            disabled={loading}
-          >
-            <Text style={styles.forgotPasswordText}>Quên mật khẩu?</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.loginButton}
-            onPress={handleLogin}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <Text style={styles.loginButtonText}>Đăng nhập</Text>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={() => {
-              setEmail('');
-              setPassword('');
-              setError('');
-            }}
-            disabled={loading}
-          >
-            <Text style={styles.secondaryButtonText}>Làm mới</Text>
-          </TouchableOpacity>
-
-          <View style={styles.registerContainer}>
-            <Text style={styles.registerText}>Chưa có tài khoản? </Text>
-            <TouchableOpacity
-              onPress={() => navigation.navigate('Register')}
-              disabled={loading}
-            >
-              <Text style={styles.registerLink}>Đăng ký</Text>
-            </TouchableOpacity>
-          </View>
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>Email</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Nhập email của bạn"
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            editable={!loading}
+          />
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>Mật khẩu</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Nhập mật khẩu"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            editable={!loading}
+          />
+        </View>
+
+        <TouchableOpacity
+          style={styles.forgotPassword}
+          onPress={() => {
+            // TODO: Implement forgot password
+          }}
+          disabled={loading}
+        >
+          <Text style={styles.forgotPasswordText}>Quên mật khẩu?</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={styles.loginButton} 
+          onPress={handleLogin}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <Text style={styles.loginButtonText}>Đăng nhập</Text>
+          )}
+        </TouchableOpacity>
+
+        <View style={styles.registerContainer}>
+          <Text style={styles.registerText}>Chưa có tài khoản? </Text>
+          <TouchableOpacity onPress={() => navigation.navigate('Register')} disabled={loading}>
+            <Text style={styles.registerLink}>Đăng ký</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
   );
 };
 
@@ -149,9 +135,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
-  },
-  scrollContent: {
-    flexGrow: 1,
     padding: 20,
     justifyContent: 'center',
   },
@@ -198,17 +181,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
-  },
-  secondaryButton: {
-    backgroundColor: '#ccc',
-    padding: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  secondaryButtonText: {
-    color: '#333',
-    fontSize: 14,
   },
   registerContainer: {
     flexDirection: 'row',

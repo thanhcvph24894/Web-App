@@ -32,4 +32,6 @@ router.put('/orders/:id/cancel', protect, orderController.cancelOrder);
 router.put('/orders/:id/update-status', protect, orderController.updateStatus);
 router.put('/orders/:id/pay', protect, orderController.payOrder);
 
+router.get('/orders/momo-return',orderController.handleMoMoReturn)
+
 module.exports = router; 

@@ -9,7 +9,7 @@
     <div class="card">
         <div class="card-body">
             <div class="table-responsive">
-                <table class="table table-hover datatable">
+                <table id="usersTable" class="table table-striped" class="table table-hover datatable">
                     <thead>
                         <tr>
                             <th width="5%">STT</th>
@@ -17,10 +17,9 @@
                             <th width="10%">Danh mục</th>
                             <th width="10%">Giá</th>
                             <th width="8%">Tồn kho</th>
-                            <th width="8%">Thuộc tính</th>
+                            <th width="12%">Thuộc tính</th>
                             <th width="12%">Hình ảnh</th>
-                            <th width="10%">Trạng thái</th>
-                            <th width="10%">Thao tác</th>
+                            <th width="15%">Thao tác</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -52,27 +51,33 @@
                                 </td>
                                 <td>
                                     <div class="small">
-                                        <% if(product.colors && product.colors.length > 0) { %>
-                                            <div><strong>Màu:</strong> 
-                                                <% product.colors.slice(0, 3).forEach((color, i) => { %>
-                                                    <span class="badge bg-secondary"><%= color %></span>
-                                                <% }) %>
-                                                <% if(product.colors.length > 3) { %>
-                                                    <span class="badge bg-secondary">+<%= product.colors.length - 3 %></span>
-                                                <% } %>
+                                        <% if(product.colors && product.colors.length> 0) { %>
+                                            <div><strong>Màu:</strong>
+                                                <% product.colors.slice(0, 3).forEach((color, i)=> { %>
+                                                    <span class="badge bg-secondary">
+                                                        <%= color %>
+                                                    </span>
+                                                    <% }) %>
+                                                        <% if(product.colors.length> 3) { %>
+                                                            <span class="badge bg-secondary">+<%= product.colors.length
+                                                                    - 3 %></span>
+                                                            <% } %>
                                             </div>
-                                        <% } %>
-                                        
-                                        <% if(product.sizes && product.sizes.length > 0) { %>
-                                            <div class="mt-1"><strong>Size:</strong> 
-                                                <% product.sizes.slice(0, 3).forEach((size, i) => { %>
-                                                    <span class="badge bg-secondary"><%= size %></span>
-                                                <% }) %>
-                                                <% if(product.sizes.length > 3) { %>
-                                                    <span class="badge bg-secondary">+<%= product.sizes.length - 3 %></span>
-                                                <% } %>
-                                            </div>
-                                        <% } %>
+                                            <% } %>
+
+                                                <% if(product.sizes && product.sizes.length> 0) { %>
+                                                    <div class="mt-1"><strong>Size:</strong>
+                                                        <% product.sizes.slice(0, 3).forEach((size, i)=> { %>
+                                                            <span class="badge bg-secondary">
+                                                                <%= size %>
+                                                            </span>
+                                                            <% }) %>
+                                                                <% if(product.sizes.length> 3) { %>
+                                                                    <span class="badge bg-secondary">+<%=
+                                                                            product.sizes.length - 3 %></span>
+                                                                    <% } %>
+                                                    </div>
+                                                    <% } %>
                                     </div>
                                 </td>
                                 <td>
@@ -84,30 +89,31 @@
                                             <% } %>
                                 </td>
                                 <td>
-                                    <div class="d-flex align-items-center">
-                                        <div class="form-check form-switch me-2">
-                                            <input class="form-check-input toggle-status" type="checkbox"
-                                                <%= product.isActive ? 'checked' : '' %>
-                                                data-url="/products/<%= product._id %>/status">
-                                        </div>
-                                        <span class="badge <%= product.isActive ? 'bg-success' : 'bg-danger' %> status-badge">
-                                            <%= product.isActive ? 'Hoạt động' : 'Ngừng bán' %>
-                                        </span>
-                                    </div>
-                                </td>
-                                <td>
-                                    <div class="btn-group">
+                                    <div class="d-flex align-items-center gap-2">
                                         <a href="/products/edit/<%= product._id %>" class="btn btn-sm btn-primary">
                                             <i class="fas fa-edit"></i>
                                         </a>
-                                        <button type="button" class="btn btn-sm btn-danger delete-item"
-                                            data-url="/products/<%= product._id %>" data-name="<%= product.name %>">
-                                            <i class="fas fa-trash"></i>
-                                        </button>
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input toggle-status" type="checkbox"
+                                                <%=product.isActive ? 'checked' : '' %>
+                                            data-url="/products/<%= product._id %>/status"
+                                                data-id="status-badge-<%= product._id %>"
+                                                    data-type="sản phẩm">
+                                                    <span
+                                                        class="badge <%= product.isActive ? 'bg-success' : 'bg-danger' %> status-badge"
+                                                        id="status-badge-<%= product._id %>">
+                                                        <%= product.isActive ? 'Đang bán' : 'Đã ẩn' %>
+                                                    </span>
+                                        </div>
                                     </div>
                                 </td>
                             </tr>
                             <% }) %>
+                                <% if (products.length===0) { %>
+                                    <tr>
+                                        <td colspan="8" class="text-center">Không có sản phẩm nào</td>
+                                    </tr>
+                                    <% } %>
                     </tbody>
                 </table>
             </div>
@@ -117,6 +123,10 @@
 
 <%- contentFor('style') %>
     <style>
+        .form-switch {
+            padding-left: 2.5em;
+        }
+
         .status-badge {
             min-width: 80px;
             text-align: center;
@@ -168,7 +178,7 @@
                 }
 
                 // Xử lý cập nhật trạng thái
-                $(document).on('change', '.toggle-status', function() {
+                $(document).on('change', '.toggle-status', function () {
                     const checkbox = $(this);
                     const url = checkbox.data('url');
                     const newState = checkbox.prop('checked');
@@ -189,7 +199,7 @@
                                 url: url,
                                 type: 'PUT',
                                 data: { isActive: newState },
-                                success: function(response) {
+                                success: function (response) {
                                     if (response.success) {
                                         // Cập nhật UI dựa trên response từ server
                                         checkbox.prop('checked', response.isActive);
@@ -209,14 +219,14 @@
                                             .removeClass('bg-success bg-danger')
                                             .addClass(!newState ? 'bg-success' : 'bg-danger')
                                             .text(!newState ? 'Hoạt động' : 'Ngừng bán');
-                                        
+
                                         Toast.fire({
                                             icon: 'error',
                                             title: response.message
                                         });
                                     }
                                 },
-                                error: function(xhr) {
+                                error: function (xhr) {
                                     // Reset về trạng thái ban đầu nếu có lỗi
                                     checkbox.prop('checked', !newState);
                                     badge
@@ -238,52 +248,6 @@
                                 .removeClass('bg-success bg-danger')
                                 .addClass(!newState ? 'bg-success' : 'bg-danger')
                                 .text(!newState ? 'Hoạt động' : 'Ngừng bán');
-                        }
-                    });
-                });
-
-                // Xử lý xóa sản phẩm
-                $('.delete-item').on('click', function () {
-                    const url = $(this).data('url');
-                    const name = $(this).data('name');
-                    const row = $(this).closest('tr');
-
-                    Swal.fire({
-                        title: 'Xác nhận xóa?',
-                        text: `Bạn có chắc chắn muốn xóa sản phẩm "${name}"?`,
-                        icon: 'warning',
-                        showCancelButton: true,
-                        confirmButtonColor: '#dc3545',
-                        cancelButtonColor: '#6c757d',
-                        confirmButtonText: 'Xóa',
-                        cancelButtonText: 'Hủy'
-                    }).then((result) => {
-                        if (result.isConfirmed) {
-                            $.ajax({
-                                url: url,
-                                type: 'DELETE',
-                                success: function (response) {
-                                    if (response.success) {
-                                        table.row(row).remove().draw();
-                                        Toast.fire({
-                                            icon: 'success',
-                                            title: response.message
-                                        });
-                                    } else {
-                                        Toast.fire({
-                                            icon: 'error',
-                                            title: response.message
-                                        });
-                                    }
-                                },
-                                error: function (xhr) {
-                                    const message = xhr.responseJSON?.message || 'Có lỗi xảy ra khi xóa sản phẩm';
-                                    Toast.fire({
-                                        icon: 'error',
-                                        title: message
-                                    });
-                                }
-                            });
                         }
                     });
                 });

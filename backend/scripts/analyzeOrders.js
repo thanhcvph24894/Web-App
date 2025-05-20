@@ -4,68 +4,70 @@
 const mongoose = require('mongoose');
 const Order = require('../models/Order');
 
-// Hàm tiện ích để log lỗi gọn hơn
-const logError = (msg, err) => {
-    console.error(`❌ ${msg}:`, err?.message || err);
-};
-
-// Hàm main
-async function analyzeOrders() {
+// Kết nối MongoDB
+mongoose.connect('mongodb://localhost:27017/shopquanao', {
+    useNewUrlParser: true,
+    useUnifiedTopology: true
+}).then(async () => {
+    console.log('MongoDB Connected');
+    
     try {
-        await mongoose.connect('mongodb://localhost:27017/shopquanao', {
-            useNewUrlParser: true,
-            useUnifiedTopology: true,
-        });
-        console.log('✅ Đã kết nối MongoDB');
-
+        // Đếm tổng số đơn hàng
         const totalOrders = await Order.countDocuments();
-        console.log(`\n📦 Tổng số đơn hàng: ${totalOrders}`);
-
-        const nullOrderNumbers = await Order.countDocuments({
-            $or: [{ orderNumber: null }, { orderNumber: { $exists: false } }],
+        console.log(`Tổng số đơn hàng: ${totalOrders}`);
+        
+        // Đếm số đơn hàng không có orderNumber
+        const nullOrderNumbers = await Order.countDocuments({ 
+            $or: [
+                { orderNumber: null },
+                { orderNumber: { $exists: false } }
+            ]
         });
-        console.log(`❓ Đơn hàng thiếu orderNumber: ${nullOrderNumbers}`);
-
+        console.log(`Số đơn hàng không có orderNumber: ${nullOrderNumbers}`);
+        
+        // Kiểm tra số đơn hàng theo trạng thái
         const statusCounts = await Order.aggregate([
             { $group: { _id: "$status", count: { $sum: 1 } } },
-            { $sort: { count: -1 } },
+            { $sort: { count: -1 } }
         ]);
-        console.log('\n📋 Số lượng đơn hàng theo trạng thái:');
+        console.log('Số đơn hàng theo trạng thái:');
         statusCounts.forEach(item => {
-            console.log(`  - ${item._id || 'Không có trạng thái'}: ${item.count}`);
+            console.log(`  ${item._id || 'Không có trạng thái'}: ${item.count}`);
         });
-
+        
+        // Kiểm tra số đơn hàng theo phương thức thanh toán
         const paymentMethodCounts = await Order.aggregate([
             { $group: { _id: "$paymentMethod", count: { $sum: 1 } } },
-            { $sort: { count: -1 } },
+            { $sort: { count: -1 } }
         ]);
-        console.log('\n💳 Số lượng theo phương thức thanh toán:');
+        console.log('Số đơn hàng theo phương thức thanh toán:');
         paymentMethodCounts.forEach(item => {
-            console.log(`  - ${item._id || 'Không có phương thức thanh toán'}: ${item.count}`);
+            console.log(`  ${item._id || 'Không có phương thức thanh toán'}: ${item.count}`);
         });
-
+        
+        // Kiểm tra số đơn hàng theo trạng thái thanh toán
         const paymentStatusCounts = await Order.aggregate([
             { $group: { _id: "$paymentStatus", count: { $sum: 1 } } },
-            { $sort: { count: -1 } },
+            { $sort: { count: -1 } }
         ]);
-        console.log('\n💰 Số lượng theo trạng thái thanh toán:');
+        console.log('Số đơn hàng theo trạng thái thanh toán:');
         paymentStatusCounts.forEach(item => {
-            console.log(`  - ${item._id || 'Không có trạng thái thanh toán'}: ${item.count}`);
+            console.log(`  ${item._id || 'Không có trạng thái thanh toán'}: ${item.count}`);
         });
-
+        
+        // Tìm đơn hàng mới nhất
         const latestOrder = await Order.findOne().sort({ createdAt: -1 });
         if (latestOrder) {
-            console.log('\n🆕 Đơn hàng mới nhất:');
+            console.log('Đơn hàng mới nhất:');
             console.log(`  ID: ${latestOrder._id}`);
-            console.log(`  OrderNumber: ${latestOrder.orderNumber || 'Không có'}`);
-            console.log(`  Ngày tạo: ${latestOrder.createdAt}`);
-            console.log(`  Trạng thái: ${latestOrder.status || 'Không có'}`);
-            console.log(`  Phương thức thanh toán: ${latestOrder.paymentMethod || 'Không có'}`);
-            console.log(`  Trạng thái thanh toán: ${latestOrder.paymentStatus || 'Không có'}`);
-        } else {
-            console.log('\n⚠️ Không tìm thấy đơn hàng nào');
+            console.log(`  OrderNumber: ${latestOrder.orderNumber}`);
+            console.log(`  Created: ${latestOrder.createdAt}`);
+            console.log(`  Status: ${latestOrder.status}`);
+            console.log(`  Payment Method: ${latestOrder.paymentMethod}`);
+            console.log(`  Payment Status: ${latestOrder.paymentStatus}`);
         }
-
+        
+        // Tìm kiếm các đơn hàng có vấn đề
         const problematicOrders = await Order.find({
             $or: [
                 { orderNumber: null },
@@ -75,14 +77,19 @@ async function analyzeOrders() {
                 { paymentMethod: null },
                 { paymentMethod: { $exists: false } },
                 { paymentStatus: null },
+<<<<<<< HEAD
                 { paymentStatus: { $exists: false } }, 
             ],
+=======
+                { paymentStatus: { $exists: false } }
+            ]
+>>>>>>> 43561fd97f9b5dd1997cd892849a5bbf6b27e34e
         });
-
+        
         if (problematicOrders.length > 0) {
-            console.log(`\n🚨 Phát hiện ${problematicOrders.length} đơn hàng có vấn đề:`);
+            console.log(`\nTìm thấy ${problematicOrders.length} đơn hàng có vấn đề:`);
             problematicOrders.forEach((order, index) => {
-                console.log(`\n🔎 Đơn hàng #${index + 1}:`);
+                console.log(`\nĐơn hàng có vấn đề #${index + 1}:`);
                 console.log(`  ID: ${order._id}`);
                 console.log(`  OrderNumber: ${order.orderNumber || 'MISSING'}`);
                 console.log(`  Created: ${order.createdAt}`);
@@ -91,15 +98,14 @@ async function analyzeOrders() {
                 console.log(`  Payment Status: ${order.paymentStatus || 'MISSING'}`);
             });
         } else {
-            console.log('\n✅ Không có đơn hàng nào có vấn đề');
+            console.log('\nKhông tìm thấy đơn hàng nào có vấn đề');
         }
     } catch (err) {
-        logError('Đã xảy ra lỗi trong quá trình phân tích', err);
+        console.error('Lỗi:', err);
     } finally {
-        await mongoose.disconnect();
-        console.log('\n🔌 Đã đóng kết nối MongoDB');
+        mongoose.connection.close();
+        console.log('\nĐã đóng kết nối MongoDB');
     }
-}
-
-// Chạy hàm
-analyzeOrders();
+}).catch(err => {
+    console.log('Lỗi kết nối:', err);
+}); 

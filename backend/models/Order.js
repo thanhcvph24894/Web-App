@@ -74,8 +74,17 @@ const orderSchema = new mongoose.Schema({
     },
     paymentStatus: {
         type: String,
-        enum: ['Chưa thanh toán', 'Đã thanh toán', 'Hoàn tiền'],
+        enum: ['Chưa thanh toán', 'Chờ thanh toán', 'Đã thanh toán', 'Hoàn tiền'],
         default: 'Chưa thanh toán'
+    },
+    momoPaymentInfo: {
+        requestId: String,
+        orderId: String,
+        payUrl: String,
+        deeplink: String,
+        qrCodeUrl: String,
+        transId: String,
+        payType: String
     },
     paidAt: {
         type: Date

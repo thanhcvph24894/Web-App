@@ -39,15 +39,17 @@ $(document).ready(function () {
         e.preventDefault();
         const deleteUrl = $(this).data('url');
         const itemName = $(this).data('name') || 'mục này';
+        const itemType = $(this).data('type') || 'mục';
+        const row = $(e.target).closest('tr');
 
         Swal.fire({
-            title: 'Xác nhận xóa?',
-            text: `Bạn có chắc chắn muốn xóa ${itemName}?`,
+            title: 'Xác nhận thao tác?',
+            text: `Bạn có chắc chắn muốn ẩn ${itemName}? ${itemType === 'category' ? 'Nếu danh mục có sản phẩm, nó sẽ bị ẩn.' : ''}`,
             icon: 'warning',
             showCancelButton: true,
             confirmButtonColor: '#dc3545',
             cancelButtonColor: '#6c757d',
-            confirmButtonText: 'Xóa',
+            confirmButtonText: 'Xác nhận',
             cancelButtonText: 'Hủy'
         }).then((result) => {
             if (result.isConfirmed) {
@@ -56,12 +58,28 @@ $(document).ready(function () {
                     type: 'DELETE',
                     success: function (response) {
                         if (response.success) {
-                            Swal.fire('Đã xóa!', response.message, 'success')
-                                .then(() => {
-                                    // Refresh the page or remove the row
-                                    const row = table.row($(e.target).closest('tr'));
-                                    row.remove().draw();
-                                });
+                            // Cập nhật UI
+                            const badge = row.find('.status-badge');
+                            if (badge.length) {
+                                badge.attr('data-active', 'false')
+                                    .text('Ẩn');
+                            }
+                            
+                            // Cập nhật toggle nếu có
+                            const toggle = row.find('.toggle-status');
+                            if (toggle.length) {
+                                toggle.prop('checked', false);
+                            }
+
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Thành công',
+                                text: response.message,
+                                toast: true,
+                                position: 'top-end',
+                                showConfirmButton: false,
+                                timer: 3000
+                            });
                         } else {
                             Swal.fire('Lỗi!', response.message, 'error');
                         }
@@ -81,11 +99,12 @@ $(document).ready(function () {
         const isActive = $(this).prop('checked');
         const badgeId = $(this).data('id');
         const badge = $(`#${badgeId}`);
-        const originalState = !isActive; // Lưu trạng thái ban đầu
+        const originalState = !isActive;
+        const itemType = $(this).data('type') || 'sản phẩm';
 
         Swal.fire({
             title: 'Xác nhận thay đổi?',
-            text: `Bạn có chắc chắn muốn ${isActive ? 'kích hoạt' : 'ẩn'} danh mục này?`,
+            text: `Bạn có chắc chắn muốn ${isActive ? 'hiển thị' : 'ẩn'} ${itemType} này?`,
             icon: 'question',
             showCancelButton: true,
             confirmButtonColor: '#198754',
@@ -101,8 +120,9 @@ $(document).ready(function () {
                     success: function (response) {
                         if (response.success) {
                             // Cập nhật badge
-                            badge.attr('data-active', isActive)
-                                .text(isActive ? 'Hoạt động' : 'Ẩn');
+                            badge.removeClass('bg-success bg-danger')
+                                .addClass(isActive ? 'bg-success' : 'bg-danger')
+                                .text(isActive ? 'Đang bán' : 'Đã ẩn');
 
                             Swal.fire({
                                 icon: 'success',
@@ -116,8 +136,9 @@ $(document).ready(function () {
                         } else {
                             // Reset về trạng thái cũ nếu có lỗi
                             $(this).prop('checked', originalState);
-                            badge.attr('data-active', originalState)
-                                .text(originalState ? 'Hoạt động' : 'Ẩn');
+                            badge.removeClass('bg-success bg-danger')
+                                .addClass(originalState ? 'bg-success' : 'bg-danger')
+                                .text(originalState ? 'Đang bán' : 'Đã ẩn');
 
                             Swal.fire('Lỗi!', response.message, 'error');
                         }
@@ -125,18 +146,20 @@ $(document).ready(function () {
                     error: function (xhr) {
                         // Reset về trạng thái cũ nếu có lỗi
                         $(this).prop('checked', originalState);
-                        badge.attr('data-active', originalState)
-                            .text(originalState ? 'Hoạt động' : 'Ẩn');
+                        badge.removeClass('bg-success bg-danger')
+                            .addClass(originalState ? 'bg-success' : 'bg-danger')
+                            .text(originalState ? 'Đang bán' : 'Đã ẩn');
 
                         const message = xhr.responseJSON?.message || 'Đã có lỗi xảy ra';
                         Swal.fire('Lỗi!', message, 'error');
                     }
                 });
             } else {
-                // Nếu người dùng hủy, reset về trạng thái cũ
+                // Reset về trạng thái cũ nếu người dùng hủy
                 $(this).prop('checked', originalState);
-                badge.attr('data-active', originalState)
-                    .text(originalState ? 'Hoạt động' : 'Ẩn');
+                badge.removeClass('bg-success bg-danger')
+                    .addClass(originalState ? 'bg-success' : 'bg-danger')
+                    .text(originalState ? 'Đang bán' : 'Đã ẩn');
             }
         });
     });
