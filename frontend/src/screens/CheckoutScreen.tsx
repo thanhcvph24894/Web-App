@@ -20,6 +20,7 @@ import authService from '../services/auth-service';
 import orderService from '../services/order-service';
 import { formatCurrency } from '../utils';
 import CustomHeader from '../components/CustomHeader';
+import { confirmPayPalPayment } from '../services/api-client';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Checkout'>;
 
@@ -39,6 +40,17 @@ interface MomoPaymentResponse {
   qrCodeUrl: string;
 }
 
+interface PayPalPaymentResponse {
+  paymentUrl: string;
+  paymentInfo: {
+    originalAmount: number;
+    originalCurrency: string;
+    convertedAmount: string;
+    convertedCurrency: string;
+    exchangeRate: number;
+  };
+}
+
 const CheckoutScreen = ({ navigation, route }: Props) => {
   const [cart, setCart] = useState<Cart | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -52,24 +64,67 @@ const CheckoutScreen = ({ navigation, route }: Props) => {
     ward: '',
     note: '',
   });
-  const [selectedPayment, setSelectedPayment] = useState<'cod' | 'momo'>('cod');
+  const [selectedPayment, setSelectedPayment] = useState<'cod' | 'momo' | 'paypal'>('cod');
   const [orderId, setOrderId] = useState<string | null>(null);
   const momoPaymentHandled = useRef(false);
 
   useEffect(() => {
-    // Listen for MoMo payment app return
-    const handleDeepLink = (event) => {
-      if (event.url && event.url.includes('momo-return')) {
-        handleMomoReturn(event.url);
+    // Listen for MoMo/PayPal payment app return
+    const handleDeepLink = (event: { url: string }) => {
+      const url = event.url;
+      if (url && url.includes('momo-return')) {
+        handleMomoReturn(url);
+      }
+      // Xử lý PayPal return
+      if (url && url.startsWith('myapp://paypal-return')) {
+        // Parse query string thủ công
+        const queryString = url.split('?')[1] || '';
+        const params: Record<string, string> = {};
+        queryString.split('&').forEach(pair => {
+          const [key, value] = pair.split('=');
+          if (key) params[key] = decodeURIComponent(value || '');
+        });
+        if (params.success === 'true') {
+          setCart(null);
+          Alert.alert(
+            'Thanh toán PayPal thành công',
+            'Cảm ơn bạn đã mua hàng!',
+            [
+              {
+                text: 'Xem đơn hàng',
+                onPress: () => {
+                  fetchCart();
+                  setTimeout(() => {
+                    navigation.navigate('OrderHistory');
+                  }, 100);
+                }
+              },
+              {
+                text: 'Trang chủ',
+                onPress: () => {
+                  fetchCart();
+                  setTimeout(() => {
+                    navigation.navigate('Main', { screen: 'HomeTab' });
+                  }, 100);
+                }
+              }
+            ]
+          );
+        } else {
+          Alert.alert('Thanh toán PayPal thất bại', 'Có lỗi xảy ra!');
+        }
       }
     };
 
     const subscription = Linking.addEventListener('url', handleDeepLink);
 
-    // Check if app was opened from MoMo deeplink
+    // Check if app was opened from MoMo or PayPal deeplink
     Linking.getInitialURL().then((url) => {
       if (url && url.includes('momo-return')) {
         handleMomoReturn(url);
+      }
+      if (url && url.startsWith('myapp://paypal-return')) {
+        handleDeepLink({ url });
       }
     });
 
@@ -113,7 +168,7 @@ const CheckoutScreen = ({ navigation, route }: Props) => {
     return false; // Allow default back behavior
   };
 
-  const handleMomoReturn = async (url) => {
+  const handleMomoReturn = async (url: string) => {
     console.log('MOMO return URL:', url);
     try {
       if (momoPaymentHandled.current) return;
@@ -150,33 +205,40 @@ const CheckoutScreen = ({ navigation, route }: Props) => {
     }
   };
 
-  const verifyPaymentStatus = async (momoOrderId) => {
+  const verifyPaymentStatus = async (momoOrderId: string) => {
     try {
       setPlacing(true);
       console.log('Verifying payment status for order:', momoOrderId);
 
-      // Call API to verify payment status
-      const response = await orderService.verifyPayment(momoOrderId);
+      // Gọi API lấy chi tiết đơn hàng để kiểm tra trạng thái thanh toán
+      const response = await orderService.getOrderById(momoOrderId);
 
-      if (response.success) {
-        // Payment verified successfully
-        setCart(null);
-        Alert.alert(
-          'Thành công',
-          'Thanh toán thành công. Cảm ơn bạn đã mua hàng!',
-          [
-            {
-              text: 'Xem đơn hàng',
-              onPress: () => navigation.navigate('OrderHistory')
-            },
-            {
-              text: 'Trang chủ',
-              onPress: () => navigation.navigate('Main', { screen: 'HomeTab' })
-            }
-          ]
-        );
+      if (response.success && response.data) {
+        // Kiểm tra trạng thái thanh toán
+        if ((response.data as any).paymentStatus === 'Đã thanh toán') {
+          setCart(null);
+          Alert.alert(
+            'Thành công',
+            'Thanh toán thành công. Cảm ơn bạn đã mua hàng!',
+            [
+              {
+                text: 'Xem đơn hàng',
+                onPress: () => navigation.navigate('OrderHistory')
+              },
+              {
+                text: 'Trang chủ',
+                onPress: () => navigation.navigate('Main', { screen: 'HomeTab' })
+              }
+            ]
+          );
+        } else {
+          Alert.alert(
+            'Thông báo',
+            'Chưa xác nhận được trạng thái thanh toán. Vui lòng kiểm tra lại đơn hàng.',
+            [{ text: 'OK' }]
+          );
+        }
       } else {
-        // Payment verification failed
         Alert.alert(
           'Thông báo',
           response.message || 'Không thể xác thực trạng thái thanh toán.',
@@ -267,7 +329,17 @@ const CheckoutScreen = ({ navigation, route }: Props) => {
     setPlacing(true);
 
     try {
-      const paymentMethod = selectedPayment === 'cod' ? 'COD' : 'MOMO';
+      let paymentMethod = 'COD';
+      switch (selectedPayment) {
+        case 'momo':
+          paymentMethod = 'MOMO';
+          break;
+        case 'paypal':
+          paymentMethod = 'PAYPAL';
+          break;
+        default:
+          paymentMethod = 'COD';
+      }
 
       const orderData = {
         shippingAddress: {
@@ -310,16 +382,9 @@ const CheckoutScreen = ({ navigation, route }: Props) => {
           // Extract the MoMo order ID to verify payment later
           if (response.data.order && response.data.order._id) {
             setOrderId(response.data.order._id);
-          } else if (response.data.momoPaymentInfo && response.data.momoPaymentInfo.orderId) {
-            setOrderId(response.data.momoPaymentInfo.orderId);
           }
 
-          let momoData;
-          if ('paymentUrl' in response.data) {
-            momoData = response.data;
-          } else if (response.data.order && 'momoPaymentInfo' in response.data.order) {
-            momoData = response.data.order.momoPaymentInfo;
-          }
+          let momoData = (response.data.order as any)?.momoPaymentInfo ?? response.data;
 
           if (momoData) {
             // On Android, offer option to open in MoMo app or via browser
@@ -349,7 +414,7 @@ const CheckoutScreen = ({ navigation, route }: Props) => {
                                   text: 'Thanh toán qua trình duyệt',
                                   onPress: () => {
                                     if (momoData.paymentUrl) {
-                                      Linking.openURL(momoData.paymentUrl);
+                                      Linking.openURL(String(momoData.paymentUrl));
                                     }
                                   },
                                 }
@@ -361,7 +426,7 @@ const CheckoutScreen = ({ navigation, route }: Props) => {
                         console.error('Error opening MoMo app:', error);
                         Alert.alert('Lỗi', 'Không thể mở ứng dụng MoMo. Thử thanh toán qua trình duyệt.');
                         if (momoData.paymentUrl) {
-                          Linking.openURL(momoData.paymentUrl);
+                          Linking.openURL(String(momoData.paymentUrl));
                         }
                       }
                     }
@@ -370,7 +435,7 @@ const CheckoutScreen = ({ navigation, route }: Props) => {
                     text: 'Thanh toán qua trình duyệt',
                     onPress: () => {
                       if (momoData.paymentUrl) {
-                        Linking.openURL(momoData.paymentUrl);
+                        Linking.openURL(String(momoData.paymentUrl));
                       }
                     }
                   },
@@ -384,12 +449,38 @@ const CheckoutScreen = ({ navigation, route }: Props) => {
             } else {
               // On iOS, directly open browser payment
               if (momoData.paymentUrl) {
-                Linking.openURL(momoData.paymentUrl);
+                Linking.openURL(String(momoData.paymentUrl));
               }
             }
           } else {
             setPlacing(false);
             Alert.alert('Lỗi', 'Không thể lấy thông tin thanh toán MoMo');
+          }
+        } else if (selectedPayment === 'paypal' && response.data) {
+          // Xử lý thanh toán PayPal
+          const paypalData = response.data as any; // ép kiểu tạm thời để tránh lỗi TypeScript
+          if (paypalData.paymentUrl && paypalData.paymentInfo) {
+            Alert.alert(
+              'Thanh toán PayPal',
+              `Số tiền: ${paypalData.paymentInfo.originalAmount?.toLocaleString('vi-VN')} VND\n` +
+              `(≈ ${paypalData.paymentInfo.convertedAmount} USD)`,
+              [
+                {
+                  text: 'Thanh toán',
+                  onPress: () => {
+                    Linking.openURL(String(paypalData.paymentUrl));
+                  }
+                },
+                {
+                  text: 'Hủy',
+                  style: 'cancel',
+                  onPress: () => setPlacing(false)
+                }
+              ]
+            );
+          } else {
+            setPlacing(false);
+            Alert.alert('Lỗi', 'Không thể lấy thông tin thanh toán PayPal');
           }
         } else if (selectedPayment === 'cod') {
           Alert.alert(
@@ -528,6 +619,24 @@ const CheckoutScreen = ({ navigation, route }: Props) => {
                   color={selectedPayment === 'momo' ? '#000' : '#666'}
                 />
                 <Text style={styles.paymentText}>Thanh toán qua MoMo</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.paymentOption,
+                  selectedPayment === 'paypal' && styles.selectedPayment,
+                ]}
+                onPress={() => setSelectedPayment('paypal')}
+              >
+                <Icon
+                  name={
+                    selectedPayment === 'paypal'
+                      ? 'radio-button-on'
+                      : 'radio-button-off'
+                  }
+                  size={24}
+                  color={selectedPayment === 'paypal' ? '#000' : '#666'}
+                />
+                <Text style={styles.paymentText}>Thanh toán qua PayPal</Text>
               </TouchableOpacity>
             </View>
 
