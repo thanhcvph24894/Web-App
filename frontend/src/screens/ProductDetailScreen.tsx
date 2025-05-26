@@ -4,16 +4,14 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList, Product } from '../types/navigation';
 import { productService, cartService } from '../services';
-import { formatCurrency } from '../utils';
-import CustomHeader from '../components/CustomHeader';
+import { convertImageUrl } from '../utils';
 
-type Comment = {
-  id: string;
-  user: string;
-  avatar: string;
-  rating: number;
-  content: string;
-  date: string;
+import CustomHeader from '../components/CustomHeader';
+import axios from 'axios';
+const API_URL = 'http://192.168.1.7:5001';
+
+const formatCurrency = (value: number) => {
+  return value?.toLocaleString('vi-VN', { style: 'currency', currency: 'VND' }) || '';
 };
 
 type ProductWithDetails = {
@@ -32,7 +30,7 @@ type ProductWithDetails = {
   sizes: string[];
   colors: string[];
   relatedProducts: any[];
-  comments: Comment[];
+  comments: any[];
 };
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ProductDetail'>;
@@ -45,18 +43,25 @@ const ProductDetailScreen = ({ navigation, route }: Props) => {
   const [quantity, setQuantity] = useState<number>(1);
   const [loading, setLoading] = useState<boolean>(true);
   const [addingToCart, setAddingToCart] = useState<boolean>(false);
+  const [productComments, setProductComments] = useState<any[]>([]);
+  const [loadingComments, setLoadingComments] = useState(false);
 
   useEffect(() => {
     fetchProductDetails();
   }, [productSlug]);
 
   const fetchProductDetails = async () => {
-    console.log('Fetching product details for slug:', productSlug);
+    console.log('DEBUG_IMAGE [ProductDetail] Fetching product details for slug:', productSlug);
     setLoading(true);
     try {
       const response = await productService.getProductDetail(productSlug);
       if (response.success && response.data) {
         const productData = response.data as unknown as Product;
+        console.log('DEBUG_IMAGE [ProductDetail] Product data:', {
+          name: productData.name,
+          images: productData.images,
+          convertedImages: productData.images.map(img => convertImageUrl(img))
+        });
         setProductDetails(productData);
         
         if (productData.colors && productData.colors.length > 0) {
@@ -234,6 +239,82 @@ const ProductDetailScreen = ({ navigation, route }: Props) => {
     </TouchableOpacity>
   );
 
+  const fetchComments = async (productId: string) => {
+    try {
+      setLoadingComments(true);
+      const response = await axios.get(`${API_URL}/api/v1/comments/product/${productId}`);
+      console.log('API Response:', response.data);
+      
+      if (response.data.success && response.data.data.comments) {
+        const comments = response.data.data.comments.map((comment: any) => ({
+          _id: comment._id,
+          user: {
+            _id: comment.user._id,
+            name: comment.user.name,
+            avatar: comment.user.avatar || ''
+          },
+          rating: Number(comment.rating),
+          content: comment.content,
+          createdAt: comment.createdAt
+        }));
+        console.log('Processed comments:', comments);
+        setProductComments(comments);
+      }
+    } catch (error) {
+      console.error('Error fetching comments:', error);
+    } finally {
+      setLoadingComments(false);
+    }
+  };
+
+  useEffect(() => {
+    if (productDetails?._id) {
+      console.log('Fetching comments for product:', productDetails._id);
+      fetchComments(productDetails._id);
+    }
+  }, [productDetails?._id]);
+
+  const renderComment = ({ item }: { item: any }) => (
+    <View style={styles.commentContainer}>
+      <View style={styles.userInfo}>
+        <Image
+          source={
+            item.user.avatar
+              ? { uri: item.user.avatar }
+              : require('../assets/default-avatar.png')
+          }
+          style={styles.avatar}
+        />
+        <View style={styles.userDetails}>
+          <Text style={styles.userName}>{item.user.name}</Text>
+          <View style={styles.rating}>
+            {[1, 2, 3, 4, 5].map((star) => (
+              <Icon
+                key={star}
+                name={star <= Math.round(Number(item.rating)) ? 'star' : 'star-outline'}
+                size={16}
+                color="#FFD700"
+              />
+            ))}
+          </View>
+        </View>
+        <Text style={styles.date}>
+          {new Date(item.createdAt).toLocaleDateString('vi-VN')}
+        </Text>
+      </View>
+      <Text style={styles.content}>{item.content}</Text>
+    </View>
+  );
+
+  // Hàm tính trung bình số sao
+  const calcAverageRating = (comments: any[]) => {
+    if (!comments || comments.length === 0) return 0;
+    const total = comments.reduce((sum, c) => sum + (c.rating || 0), 0);
+    return total / comments.length;
+  };
+
+  const averageRating = calcAverageRating(productComments);
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -264,7 +345,7 @@ const ProductDetailScreen = ({ navigation, route }: Props) => {
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Hình ảnh sản phẩm */}
         <Image
-          source={{ uri: productDetails.images[0] }}
+          source={{ uri: convertImageUrl(productDetails.images[0]) }}
           style={styles.productImage}
           resizeMode="cover"
         />
@@ -283,17 +364,15 @@ const ProductDetailScreen = ({ navigation, route }: Props) => {
             )}
           </View>
 
-          {/* Đánh giá */}
+          {/* Đánh giá trung bình */}
           <View style={styles.ratingContainer}>
             <View style={styles.starsContainer}>
               {[1, 2, 3, 4, 5].map((_, index) => (
                 <Icon
                   key={`star-${index}`}
                   name={
-                    index < Math.floor(productDetails.averageRating)
+                    index < Math.round(averageRating)
                       ? 'star'
-                      : index < productDetails.averageRating
-                      ? 'star-half'
                       : 'star-outline'
                   }
                   size={18}
@@ -303,7 +382,7 @@ const ProductDetailScreen = ({ navigation, route }: Props) => {
               ))}
             </View>
             <Text style={styles.ratingText}>
-              {productDetails.averageRating.toFixed(1)}
+              {averageRating.toFixed(1)}
             </Text>
           </View>
         </View>
@@ -344,6 +423,26 @@ const ProductDetailScreen = ({ navigation, route }: Props) => {
           <Text style={styles.descriptionText}>{productDetails.description}</Text>
         </View>
       </ScrollView>
+
+      {/* Comments Section */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Đánh giá sản phẩm</Text>
+        {loadingComments ? (
+          <ActivityIndicator size="large" color="#000" style={styles.loading} />
+        ) : productComments.length > 0 ? (
+          <FlatList
+            data={productComments}
+            renderItem={renderComment}
+            keyExtractor={(item) => item._id}
+            scrollEnabled={false}
+            ListEmptyComponent={
+              <Text style={styles.noComments}>Chưa có đánh giá nào cho sản phẩm này</Text>
+            }
+          />
+        ) : (
+          <Text style={styles.noComments}>Chưa có đánh giá nào cho sản phẩm này</Text>
+        )}
+      </View>
 
       {/* Thanh công cụ dưới */}
       <View style={styles.bottomToolbar}>
@@ -575,6 +674,59 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
+  },
+  section: {
+    padding: 16,
+    backgroundColor: '#fff',
+    marginTop: 8,
+  },
+  commentContainer: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+    backgroundColor: '#fff',
+  },
+  userInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+    backgroundColor: '#f0f0f0',
+  },
+  userDetails: {
+    flex: 1,
+  },
+  userName: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  rating: {
+    flexDirection: 'row',
+    gap: 2,
+  },
+  date: {
+    fontSize: 12,
+    color: '#666',
+  },
+  content: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#333',
+  },
+  loading: {
+    padding: 20,
+  },
+  noComments: {
+    textAlign: 'center',
+    color: '#666',
+    fontSize: 14,
+    padding: 20,
   },
 });
 

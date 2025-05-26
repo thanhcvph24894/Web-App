@@ -7,12 +7,15 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types/navigation';
 import { orderService, authService } from '../services';
 import CustomHeader from '../components/CustomHeader';
+import CommentForm from '../components/CommentForm';
+import commentService from '../services/comment-service';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'OrderHistory'>;
@@ -41,10 +44,18 @@ const OrderHistoryScreen = ({ navigation }: Props) => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [cancelingOrderId, setCancelingOrderId] = useState<string | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<{
+    orderId: string;
+    productId: string;
+  } | null>(null);
 
   useEffect(() => {
     fetchOrders();
   }, []);
+
+  useEffect(() => {
+    console.log('selectedProduct:', selectedProduct);
+  }, [selectedProduct]);
 
   const fetchOrders = async () => {
     setLoading(true);
@@ -68,6 +79,7 @@ const OrderHistoryScreen = ({ navigation }: Props) => {
       }
 
       const response = await orderService.getOrders();
+      console.log('Order API response:', response);
       
       // Kiểm tra lỗi unauthorized
       if (response.unauthorizedError) {
@@ -90,16 +102,12 @@ const OrderHistoryScreen = ({ navigation }: Props) => {
         return;
       }
       
-      if (response.success && response.data) {
-        if (Array.isArray(response.data)) {
-          setOrders(response.data as Order[]);
-        } else if ('orders' in response.data) {
-          setOrders((response.data as any).orders as Order[]);
-        } else {
-          setOrders([]);
-        }
+      if (response.success && response.data && Array.isArray(response.data.orders)) {
+        setOrders(response.data.orders as Order[]);
+        console.log('Orders:', response.data.orders);
       } else {
-        Alert.alert('Lỗi', 'Không thể tải lịch sử đơn hàng');
+        setOrders([]);
+        console.log('Orders: []');
       }
     } catch (error) {
       console.error('Lỗi khi tải lịch sử đơn hàng:', error);
@@ -145,6 +153,42 @@ const OrderHistoryScreen = ({ navigation }: Props) => {
     return date.toLocaleDateString('vi-VN');
   };
 
+  const handleCommentSuccess = () => {
+    setSelectedProduct(null);
+    fetchOrders(); // Refresh orders to update comment status
+  };
+
+  const handleCommentCancel = () => {
+    setSelectedProduct(null);
+  };
+
+  const renderOrderItem = (item: any, orderStatus: string, orderId: string) => {
+    return (
+      <View style={styles.orderItem}>
+        <View style={styles.itemInfo}>
+          <Text style={styles.itemName}>{item.product.name}</Text>
+          <Text style={styles.itemQuantity}>x{item.quantity}</Text>
+        </View>
+        <Text style={styles.itemPrice}>{item.price.toLocaleString('vi-VN')}đ</Text>
+        {(orderStatus === 'Đã xác nhận' || orderStatus === 'Đã giao hàng') && (
+          <View style={styles.commentButtonWrapper}>
+            <TouchableOpacity
+              style={styles.commentButton}
+              onPress={() => {
+                setSelectedProduct({
+                  orderId: orderId,
+                  productId: item.product._id
+                });
+              }}
+            >
+              <Text style={styles.commentButtonText}>Đánh giá sản phẩm</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+    );
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -176,11 +220,7 @@ const OrderHistoryScreen = ({ navigation }: Props) => {
               <View style={styles.orderItems}>
                 {order.items.map((item, index) => (
                   <View key={index} style={styles.itemRow}>
-                    <View style={styles.itemInfo}>
-                      <Text style={styles.itemName}>{item.product.name}</Text>
-                      <Text style={styles.itemQuantity}>x{item.quantity}</Text>
-                    </View>
-                    <Text style={styles.itemPrice}>{item.price.toLocaleString('vi-VN')}đ</Text>
+                    {renderOrderItem(item, order.orderStatus, order._id)}
                   </View>
                 ))}
               </View>
@@ -212,6 +252,27 @@ const OrderHistoryScreen = ({ navigation }: Props) => {
           </View>
         )}
       </ScrollView>
+
+      {/* Comment Form Modal */}
+      {selectedProduct && (
+        <Modal
+          visible={true}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={handleCommentCancel}
+        >
+          <View style={styles.modalContainer}>
+            <View style={styles.modalContent}>
+              <CommentForm
+                orderId={selectedProduct.orderId}
+                productId={selectedProduct.productId}
+                onSuccess={handleCommentSuccess}
+                onCancel={handleCommentCancel}
+              />
+            </View>
+          </View>
+        </Modal>
+      )}
     </View>
   );
 };
@@ -299,9 +360,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   itemInfo: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 4,
   },
   itemName: {
     fontSize: 15,
@@ -315,6 +376,7 @@ const styles = StyleSheet.create({
   itemPrice: {
     fontSize: 15,
     fontWeight: '500',
+    marginBottom: 8,
   },
   orderFooter: {
     flexDirection: 'row',
@@ -344,11 +406,59 @@ const styles = StyleSheet.create({
     marginTop: 12,
     height: 45,
     justifyContent: 'center',
+    shadowColor: '#f44336',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
   },
   cancelButtonText: {
     color: '#f44336',
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    width: '90%',
+    maxHeight: '80%',
+  },
+  commentButtonWrapper: {
+    width: '100%',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  commentButton: {
+    backgroundColor: '#ff9800',
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    borderRadius: 24,
+    marginTop: 0,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+  },
+  commentButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 15,
+    textAlign: 'center',
+  },
+  orderItem: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
 });
 
