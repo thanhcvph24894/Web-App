@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {RootStackParamList} from '../types/navigation';
@@ -31,6 +32,7 @@ const RegisterScreen = ({navigation}: Props) => {
       setLoading(true);
       setError('');
 
+      console.log('DEBUG [Register] Bắt đầu đăng ký với:', { name, email, phone });
       const response = await authService.register({
         name,
         email,
@@ -38,18 +40,29 @@ const RegisterScreen = ({navigation}: Props) => {
         phone: phone || undefined,
       });
 
+      console.log('DEBUG [Register] Response:', response);
+
       if (response?.success) {
-        // Lưu token để sử dụng cho các request sau này
-        const token = response.data?.token;
-        if (token) {
-          setToken(token);
-          navigation.navigate('Main', {screen: 'HomeTab'});
-        }
+        console.log('DEBUG [Register] Đăng ký thành công');
+        Alert.alert(
+          'Thành công',
+          'Đăng ký tài khoản thành công!',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                console.log('DEBUG [Register] Chuyển về trang đăng nhập');
+                navigation.navigate('Login');
+              }
+            }
+          ]
+        );
       } else {
+        console.log('DEBUG [Register] Đăng ký thất bại:', response?.message);
         setError(response?.message || 'Đăng ký thất bại');
       }
     } catch (err: any) {
-      console.error('Lỗi đăng ký:', err);
+      console.error('DEBUG [Register] Lỗi đăng ký:', err);
       setError(err?.message || 'Có lỗi xảy ra, vui lòng thử lại');
     } finally {
       setLoading(false);
