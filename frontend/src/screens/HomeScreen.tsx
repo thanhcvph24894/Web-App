@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   ScrollView,
   RefreshControl,
+  TextInput,
 } from 'react-native';
 import {CompositeNavigationProp} from '@react-navigation/native';
 import {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
@@ -20,7 +21,7 @@ import {
   Product,
 } from '../types/navigation';
 import {categoryService, productService} from '../services';
-import {formatCurrency} from '../utils';
+import {formatCurrency, convertImageUrl} from '../utils';
 import CustomHeader from '../components/CustomHeader';
 
 type Props = {
@@ -43,6 +44,8 @@ interface ProductListData {
 const HomeScreen = ({navigation}: Props) => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
+  const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCategoryIndex, setSelectedCategoryIndex] = useState<number>(0);
   const [loadingCategories, setLoadingCategories] = useState<boolean>(true);
   const [loadingProducts, setLoadingProducts] = useState<boolean>(true);
@@ -114,61 +117,98 @@ const HomeScreen = ({navigation}: Props) => {
     navigation.navigate('ProductDetail', {productSlug: product.slug});
   };
 
+  const handleSearch = (text: string) => {
+    setSearchQuery(text);
+    if (text.trim() === '') {
+      setFilteredProducts(products);
+    } else {
+      const filtered = products.filter(product =>
+        product.name.toLowerCase().includes(text.toLowerCase()) ||
+        product.description.toLowerCase().includes(text.toLowerCase())
+      );
+      setFilteredProducts(filtered);
+    }
+  };
+
+  useEffect(() => {
+    setFilteredProducts(products);
+  }, [products]);
+
   const renderCategoryItem = ({
     item,
     index,
   }: {
     item: Category;
     index: number;
-  }) => (
-    <TouchableOpacity
-      style={[
-        styles.categoryItem,
-        selectedCategoryIndex === index && styles.selectedCategory,
-      ]}
-      onPress={() => handleCategoryPress(item, index)}>
-      {item.image ? (
-        <Image source={{uri: item.image}} style={styles.categoryImage} />
-      ) : (
-        <View style={styles.categoryImagePlaceholder}>
-          <Text style={styles.categoryImagePlaceholderText}>
-            {item.name.charAt(0)}
-          </Text>
-        </View>
-      )}
-      <Text style={styles.categoryName}>{item.name}</Text>
-      {item.productCount && (
-        <Text style={styles.productCount}>{item.productCount} sản phẩm</Text>
-      )}
-    </TouchableOpacity>
-  );
-
-  const renderProductItem = ({item}: {item: Product}) => (
-    <TouchableOpacity
-      style={styles.productItem}
-      onPress={() => handleProductPress(item)}>
-      <Image
-        source={{uri: item.images[0]}}
-        style={styles.productImage}
-        resizeMode="cover"
-      />
-      <View style={styles.productInfo}>
-        <Text style={styles.productName} numberOfLines={2}>
-          {item.name}
-        </Text>
-        <View style={styles.priceContainer}>
-          <Text style={styles.productPrice}>
-            {formatCurrency(item.salePrice || item.price)}
-          </Text>
-          {item.salePrice && (
-            <Text style={styles.originalPrice}>
-              {formatCurrency(item.price)}
+  }) => {
+    console.log(
+      'DEBUG_IMAGE [Category]',
+      JSON.stringify({
+        original: item.image,
+        converted: item.image ? convertImageUrl(item.image) : null,
+        categoryName: item.name
+      })
+    );
+    return (
+      <TouchableOpacity
+        style={[
+          styles.categoryItem,
+          selectedCategoryIndex === index && styles.selectedCategory,
+        ]}
+        onPress={() => handleCategoryPress(item, index)}>
+        {item.image ? (
+          <Image source={{uri: convertImageUrl(item.image)}} style={styles.categoryImage} />
+        ) : (
+          <View style={styles.categoryImagePlaceholder}>
+            <Text style={styles.categoryImagePlaceholderText}>
+              {item.name.charAt(0)}
             </Text>
-          )}
+          </View>
+        )}
+        <Text style={styles.categoryName}>{item.name}</Text>
+        {item.productCount && (
+          <Text style={styles.productCount}>{item.productCount} sản phẩm</Text>
+        )}
+      </TouchableOpacity>
+    );
+  };
+
+  const renderProductItem = ({item}: {item: Product}) => {
+    console.log(
+      'DEBUG_IMAGE [Product]',
+      JSON.stringify({
+        original: item.images[0],
+        converted: item.images[0] ? convertImageUrl(item.images[0]) : null,
+        productName: item.name
+      })
+    );
+    return (
+      <TouchableOpacity
+        style={styles.productItem}
+        onPress={() => handleProductPress(item)}>
+        <Image
+          source={{uri: item.images[0] ? convertImageUrl(item.images[0]) : ''}}
+          style={styles.productImage}
+          resizeMode="cover"
+        />
+        <View style={styles.productInfo}>
+          <Text style={styles.productName} numberOfLines={2}>
+            {item.name}
+          </Text>
+          <View style={styles.priceContainer}>
+            <Text style={styles.productPrice}>
+              {formatCurrency(item.salePrice || item.price)}
+            </Text>
+            {item.salePrice && (
+              <Text style={styles.originalPrice}>
+                {formatCurrency(item.price)}
+              </Text>
+            )}
+          </View>
         </View>
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <ScrollView
@@ -177,6 +217,15 @@ const HomeScreen = ({navigation}: Props) => {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }>
       <CustomHeader title="Cửa hàng" showBackButton={false} />
+
+      <View style={styles.searchContainer}>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Tìm kiếm sản phẩm..."
+          value={searchQuery}
+          onChangeText={handleSearch}
+        />
+      </View>
 
       <View style={styles.categories}>
         <Text style={styles.sectionTitle}>Danh mục</Text>
@@ -195,17 +244,24 @@ const HomeScreen = ({navigation}: Props) => {
       </View>
 
       <View style={styles.products}>
-        <Text style={styles.sectionTitle}>Sản phẩm mới</Text>
+        <Text style={styles.sectionTitle}>
+          {searchQuery ? 'Kết quả tìm kiếm' : 'Sản phẩm mới'}
+        </Text>
         {loadingProducts ? (
           <ActivityIndicator size="large" color="#000" />
         ) : (
           <FlatList
-            data={products}
+            data={filteredProducts}
             keyExtractor={item => item._id}
             renderItem={renderProductItem}
             numColumns={2}
             scrollEnabled={false}
             contentContainerStyle={styles.productList}
+            ListEmptyComponent={
+              <Text style={styles.noResultsText}>
+                Không tìm thấy sản phẩm phù hợp
+              </Text>
+            }
           />
         )}
       </View>
@@ -296,13 +352,16 @@ const styles = StyleSheet.create({
     shadowOffset: {width: 0, height: 1},
     shadowOpacity: 0.1,
     shadowRadius: 2,
+    maxWidth: '45%',
   },
   productImage: {
     width: '100%',
     height: 150,
+    aspectRatio: 1,
   },
   productInfo: {
     padding: 8,
+    height: 90,
   },
   productName: {
     fontSize: 14,
@@ -324,6 +383,22 @@ const styles = StyleSheet.create({
     color: '#888',
     textDecorationLine: 'line-through',
     marginLeft: 8,
+  },
+  searchContainer: {
+    padding: 16,
+    backgroundColor: '#fff',
+  },
+  searchInput: {
+    backgroundColor: '#f0f0f0',
+    padding: 12,
+    borderRadius: 8,
+    fontSize: 16,
+  },
+  noResultsText: {
+    textAlign: 'center',
+    marginTop: 20,
+    fontSize: 16,
+    color: '#666',
   },
 });
 

@@ -77,8 +77,13 @@ mongoose.connect('mongodb://localhost:27017/shopquanao', {
                 { paymentMethod: null },
                 { paymentMethod: { $exists: false } },
                 { paymentStatus: null },
+<<<<<<< HEAD
+                { paymentStatus: { $exists: false } }, 
+            ],
+=======
                 { paymentStatus: { $exists: false } }
             ]
+>>>>>>> 43561fd97f9b5dd1997cd892849a5bbf6b27e34e
         });
         
         if (problematicOrders.length > 0) {
