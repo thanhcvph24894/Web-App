@@ -147,7 +147,7 @@ const CheckoutScreen = ({ navigation, route }: Props) => {
       console.error('Error handling MoMo return:', error);
       Alert.alert('Lỗi', 'Không thể xác thực trạng thái thanh toán.');
       setPlacing(false);
-    }
+    } 
   };
 
   const verifyPaymentStatus = async (momoOrderId) => {
@@ -348,7 +348,7 @@ const CheckoutScreen = ({ navigation, route }: Props) => {
                                 {
                                   text: 'Thanh toán qua trình duyệt',
                                   onPress: () => {
-                                    if (momoData.paymentUrl) {
+                                    if (momoData.paymentUrl) {e
                                       Linking.openURL(momoData.paymentUrl);
                                     }
                                   },
